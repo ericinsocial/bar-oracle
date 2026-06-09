@@ -1,15 +1,11 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
-
 <head>
-
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <title>Bar Oracle</title>
 
 <style>
-
 body{
   margin:0;
   background:#111;
@@ -57,14 +53,21 @@ h1{
   border-radius:20px;
 }
 
+.drink-img{
+  width:100%;
+  max-height:300px;
+  object-fit:cover;
+  border-radius:15px;
+  margin-bottom:20px;
+}
+
 .name{
   font-size:30px;
   font-weight:bold;
   margin-bottom:10px;
 }
 
-.abv,
-.flavor{
+.abv,.flavor{
   font-size:18px;
   margin:10px 0;
   color:#ddd;
@@ -78,185 +81,124 @@ h1{
   color:#f5d27a;
 }
 
+.error{
+  color:#ff8888;
+  line-height:1.6;
+}
 </style>
-
 </head>
 
 <body>
 
 <div class="card" id="app">
+  <h1>🍸 今晚想喝什麼？</h1>
 
-<h1>🍸 今晚想喝什麼？</h1>
+  <button class="btn cocktail" onclick="drawDrink('cocktail')">
+    調酒 Cocktail
+  </button>
 
-<button
-class="btn cocktail"
-onclick="drawDrink('cocktail')">
-
-調酒 Cocktail
-
-</button>
-
-<button
-class="btn whisky"
-onclick="drawDrink('whisky')">
-
-純飲 Whisky
-
-</button>
-
+  <button class="btn whisky" onclick="drawDrink('whisky')">
+    純飲 Whisky
+  </button>
 </div>
 
 <script>
-
-const sheetUrl =
-"https://docs.google.com/spreadsheets/d/1J6IApS7y0lCXUiKJFFbjJgqwaL24lUZ5MatWTD4hNm4/gviz/tq?tqx=out:csv&gid=1878010087";
+const sheetUrl = "https://docs.google.com/spreadsheets/d/1J6IApS7y0lCXUiKJFFbjJgqwaL24lUZ5MatWTD4hNm4/gviz/tq?tqx=out:csv&gid=1878010087";
 
 let drinks = [];
 
 async function loadDrinks(){
-
-  const response = await fetch(sheetUrl);
-
-  const csvText = await response.text();
-
-  drinks = parseCSV(csvText);
-
+  try{
+    const response = await fetch(sheetUrl);
+    const csvText = await response.text();
+    drinks = parseCSV(csvText);
+    console.log("酒單讀取成功", drinks);
+  }catch(error){
+    document.getElementById("app").innerHTML = `
+      <p class="error">酒單讀取失敗，請檢查 Google Sheet 是否公開。</p>
+    `;
+  }
 }
 
 function parseCSV(text){
-
-  const rows =
-    text.trim()
-    .split("\n")
-    .map(row => row.split(","));
-
-  const headers =
-    rows[0].map(h =>
-      h.replaceAll('"','').trim()
-    );
-
-  return rows.slice(1).map(row => {
-
-    let obj = {};
-
-    headers.forEach((header,index)=>{
-
-      obj[header] =
-      row[index]
-      ? row[index].replaceAll('"','').trim()
-      : "";
-
-    });
-
-    return obj;
-
+  const rows = text.trim().split("\n").map(row => {
+    return row.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g)?.map(cell =>
+      cell.replace(/^"|"$/g, "").trim()
+    ) || [];
   });
 
+  const headers = rows[0];
+
+  return rows.slice(1).map(row => {
+    let obj = {};
+    headers.forEach((header,index)=>{
+      obj[header] = row[index] || "";
+    });
+    return obj;
+  });
 }
 
 function drawDrink(category){
+  if(drinks.length === 0){
+    alert("酒單還沒讀取完成，請等一下再按。");
+    return;
+  }
 
-  const filtered =
-    drinks.filter(
-      drink => drink.category === category
-    );
+  const filtered = drinks.filter(drink => drink.category === category);
 
-  const randomIndex =
-    Math.floor(
-      Math.random() * filtered.length
-    );
+  if(filtered.length === 0){
+    alert("這個分類目前沒有資料。");
+    return;
+  }
 
-  const drink =
-    filtered[randomIndex];
+  const randomIndex = Math.floor(Math.random() * filtered.length);
+  const drink = filtered[randomIndex];
+
+  const imageHtml = drink.image_url
+    ? `<img class="drink-img" src="${drink.image_url}" alt="${drink.name}">`
+    : "";
 
   document.getElementById("app").innerHTML = `
-
     <div class="result">
-<img
-src="${drink.image_url}"
-style="
-width:100%;
-max-height:300px;
-object-fit:cover;
-border-radius:15px;
-margin-bottom:20px;
-">
-      <div class="name">
+      ${imageHtml}
 
-        ${drink.name}
+      <div class="name">${drink.name}</div>
 
-      </div>
+      <div class="abv">酒精濃度：${drink.abv}</div>
 
-      <div class="abv">
-
-        酒精濃度：${drink.abv}
-
-      </div>
-
-      <div class="flavor">
-
-        風味：${drink.flavor}
-
-      </div>
+      <div class="flavor">風味：${drink.flavor}</div>
 
       <div class="oracle">
-
         ${drink.oracle || "今晚的答案，不一定在第一杯裡。"}
-
       </div>
 
-      <button
-      class="btn cocktail"
-      onclick="drawDrink('${category}')">
-
-      不喜歡，再試一次
-
+      <button class="btn cocktail" onclick="drawDrink('${category}')">
+        不喜歡，再試一次
       </button>
 
-      <button
-      class="btn whisky"
-      onclick="showHome()">
-
-      ← 回上一頁
-
+      <button class="btn whisky" onclick="showHome()">
+        ← 回上一頁
       </button>
-
     </div>
-
   `;
-
 }
 
 function showHome(){
-
   document.getElementById("app").innerHTML = `
-
     <h1>🍸 今晚想喝什麼？</h1>
 
-    <button
-    class="btn cocktail"
-    onclick="drawDrink('cocktail')">
-
-    調酒 Cocktail
-
+    <button class="btn cocktail" onclick="drawDrink('cocktail')">
+      調酒 Cocktail
     </button>
 
-    <button
-    class="btn whisky"
-    onclick="drawDrink('whisky')">
-
-    純飲 Whisky
-
+    <button class="btn whisky" onclick="drawDrink('whisky')">
+      純飲 Whisky
     </button>
-
   `;
-
 }
 
 loadDrinks();
-
 </script>
 
 </body>
-
 </html>

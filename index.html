@@ -172,7 +172,15 @@ function drawDrink(category){
   document.getElementById("app").innerHTML = `
 
     <div class="result">
-
+<img
+src="${drink.image_url}"
+style="
+width:100%;
+max-height:300px;
+object-fit:cover;
+border-radius:15px;
+margin-bottom:20px;
+">
       <div class="name">
 
         ${drink.name}

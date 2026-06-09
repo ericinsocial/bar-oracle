@@ -3,72 +3,130 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <title>Bar Oracle</title>
 
 <style>
-
 body{
-    margin:0;
-    background:#111;
-    color:white;
-    font-family:sans-serif;
-    display:flex;
-    justify-content:center;
-    align-items:center;
-    height:100vh;
+  margin:0;
+  background:#111;
+  color:white;
+  font-family:sans-serif;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  min-height:100vh;
 }
 
 .card{
-    width:90%;
-    max-width:500px;
-    text-align:center;
+  width:90%;
+  max-width:500px;
+  text-align:center;
 }
 
 h1{
-    margin-bottom:30px;
+  margin-bottom:20px;
 }
 
 .btn{
-    display:block;
-    width:100%;
-    margin:15px 0;
-    padding:18px;
-    font-size:20px;
-    border:none;
-    border-radius:12px;
-    cursor:pointer;
+  display:block;
+  width:100%;
+  margin:15px 0;
+  padding:18px;
+  font-size:20px;
+  border:none;
+  border-radius:12px;
+  cursor:pointer;
 }
 
-.cocktail{
-    background:#d4af37;
+.cocktail{ background:#d4af37; }
+.whisky{ background:#8b5e3c; color:white; }
+
+.result{
+  background:#1c1c1c;
+  padding:25px;
+  border-radius:20px;
 }
 
-.whisky{
-    background:#8b5e3c;
-    color:white;
+.name{
+  font-size:30px;
+  font-weight:bold;
+  margin-bottom:10px;
 }
 
+.abv,.flavor{
+  font-size:18px;
+  margin:10px 0;
+  color:#ddd;
+}
+
+.oracle{
+  margin-top:25px;
+  font-size:20px;
+  line-height:1.6;
+  color:#f5d27a;
+}
 </style>
-
 </head>
 
 <body>
 
-<div class="card">
+<div class="card" id="app">
+  <h1>🍸 今晚想喝什麼？</h1>
 
-<h1>🍸 今晚想喝什麼？</h1>
+  <button class="btn cocktail" onclick="drawDrink('cocktail')">
+    調酒 Cocktail
+  </button>
 
-<button class="btn cocktail">
-調酒 Cocktail
-</button>
-
-<button class="btn whisky">
-純飲 Whisky
-</button>
-
+  <button class="btn whisky" onclick="drawDrink('whisky')">
+    純飲 Whisky
+  </button>
 </div>
 
-</body>
+<script>
+const sheetUrl = "https://docs.google.com/spreadsheets/d/1J6IApS7y0lCXUiKJFFbjJgqwaL24lUZ5MatWTD4hNm4/gviz/tq?tqx=out:csv&gid=1878010087";
 
+let drinks = [];
+
+async function loadDrinks(){
+  const response = await fetch(sheetUrl);
+  const csvText = await response.text();
+  drinks = parseCSV(csvText);
+}
+
+function parseCSV(text){
+  const rows = text.trim().split("\n").map(row => row.split(","));
+  const headers = rows[0].map(h => h.replaceAll('"','').trim());
+
+  return rows.slice(1).map(row => {
+    let obj = {};
+    headers.forEach((header, index) => {
+      obj[header] = row[index] ? row[index].replaceAll('"','').trim() : "";
+    });
+    return obj;
+  });
+}
+
+function drawDrink(category){
+  const filtered = drinks.filter(drink => drink.category === category);
+  const randomIndex = Math.floor(Math.random() * filtered.length);
+  const drink = filtered[randomIndex];
+
+  document.getElementById("app").innerHTML = `
+    <div class="result">
+      <div class="name">${drink.name}</div>
+      <div class="abv">酒精濃度：${drink.abv}</div>
+      <div class="flavor">風味：${drink.flavor}</div>
+      <div class="oracle">${drink.oracle || "今晚的答案，不一定在第一杯裡。"}</div>
+
+      <button class="btn cocktail" onclick="drawDrink('${category}')">
+        不喜歡，再試一次
+      </button>
+    </div>
+  `;
+}
+
+loadDrinks();
+</script>
+
+</body>
 </html>

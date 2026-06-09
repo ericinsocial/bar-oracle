@@ -7,6 +7,7 @@
 <title>Bar Oracle</title>
 
 <style>
+
 body{
     margin:0;
     background:#111;
@@ -25,33 +26,49 @@ body{
 }
 
 h1{
-    font-size:32px;
+    margin-bottom:30px;
 }
 
-button{
-    background:#d4af37;
+.btn{
+    display:block;
+    width:100%;
+    margin:15px 0;
+    padding:18px;
+    font-size:20px;
     border:none;
-    padding:15px 25px;
-    border-radius:10px;
-    font-size:18px;
+    border-radius:12px;
     cursor:pointer;
 }
+
+.cocktail{
+    background:#d4af37;
+}
+
+.whisky{
+    background:#8b5e3c;
+    color:white;
+}
+
 </style>
+
 </head>
 
 <body>
 
 <div class="card">
 
-<h1>🍸 Bar Oracle</h1>
+<h1>🍸 今晚想喝什麼？</h1>
 
-<p>今晚不知道喝什麼？</p>
+<button class="btn cocktail">
+調酒 Cocktail
+</button>
 
-<button>
-開始抽酒
+<button class="btn whisky">
+純飲 Whisky
 </button>
 
 </div>
 
 </body>
+
 </html>

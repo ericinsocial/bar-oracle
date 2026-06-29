@@ -61,6 +61,51 @@ h1{
   margin-bottom:20px;
 }
 
+.photo-frame{
+  width:100%;
+  aspect-ratio:3 / 4;
+  background:#050505;
+  border:2px solid #d4af37;
+  border-radius:18px;
+  box-sizing:border-box;
+  margin-bottom:20px;
+  overflow:hidden;
+  position:relative;
+}
+
+.camera-preview,
+.photo-canvas{
+  width:100%;
+  height:100%;
+  display:block;
+  object-fit:cover;
+}
+
+.camera-placeholder{
+  height:100%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:20px;
+  box-sizing:border-box;
+  color:#ddd;
+  line-height:1.6;
+}
+
+.share-footer{
+  display:none;
+  margin-top:25px;
+  padding-top:18px;
+  border-top:1px solid rgba(255,255,255,0.16);
+  color:#d4af37;
+  font-size:16px;
+  letter-spacing:1px;
+}
+
+.result.share-ready .share-footer{
+  display:block;
+}
+
 .name{
   font-size:30px;
   font-weight:bold;
@@ -104,8 +149,13 @@ h1{
 
 <script>
 const sheetUrl = "https://docs.google.com/spreadsheets/d/1J6IApS7y0lCXUiKJFFbjJgqwaL24lUZ5MatWTD4hNm4/gviz/tq?tqx=out:csv&gid=1878010087";
+const shareFooterText = "Bar Oracle × 詠真堂";
 
 let drinks = [];
+let currentDrink = null;
+let currentCategory = "";
+let cameraStream = null;
+let capturedPhotoDataUrl = "";
 
 async function loadDrinks(){
   try{
@@ -139,6 +189,9 @@ function parseCSV(text){
 }
 
 function drawDrink(category){
+  stopCamera();
+  capturedPhotoDataUrl = "";
+
   if(drinks.length === 0){
     alert("酒單還沒讀取完成，請等一下再按。");
     return;
@@ -153,14 +206,22 @@ function drawDrink(category){
 
   const randomIndex = Math.floor(Math.random() * filtered.length);
   const drink = filtered[randomIndex];
+  currentDrink = drink;
+  currentCategory = category;
 
+  renderResult(drink, category);
+}
+
+function renderResult(drink, category){
   const imageHtml = drink.image_url
     ? `<img class="drink-img" src="${drink.image_url}" alt="${drink.name}">`
     : "";
 
   document.getElementById("app").innerHTML = `
-    <div class="result">
-      ${imageHtml}
+    <div class="result" id="resultCard">
+      <div id="mediaArea">
+        ${imageHtml}
+      </div>
 
       <div class="name">${drink.name}</div>
 
@@ -172,18 +233,305 @@ function drawDrink(category){
         ${drink.oracle || "今晚的答案，不一定在第一杯裡。"}
       </div>
 
-      <button class="btn cocktail" onclick="drawDrink('${category}')">
-        不喜歡，再試一次
-      </button>
+      <div class="share-footer">${shareFooterText}</div>
 
-      <button class="btn whisky" onclick="showHome()">
-        ← 回上一頁
-      </button>
+      <div id="actionArea">
+        <button class="btn cocktail" onclick="startPhotoShare()">
+          📸 拍照分享
+        </button>
+
+        <button class="btn cocktail" onclick="drawDrink('${category}')">
+          不喜歡，再試一次
+        </button>
+
+        <button class="btn whisky" onclick="showHome()">
+          ← 回上一頁
+        </button>
+      </div>
     </div>
   `;
 }
 
+async function startPhotoShare(){
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    alert("這個瀏覽器不支援相機預覽，請改用手機瀏覽器或更新瀏覽器。");
+    return;
+  }
+
+  capturedPhotoDataUrl = "";
+  document.getElementById("resultCard").classList.remove("share-ready");
+  document.getElementById("mediaArea").innerHTML = `
+    <div class="photo-frame">
+      <video class="camera-preview" id="cameraPreview" autoplay playsinline muted></video>
+    </div>
+  `;
+  document.getElementById("actionArea").innerHTML = `
+    <button class="btn cocktail" onclick="capturePhoto()">
+      拍照
+    </button>
+
+    <button class="btn whisky" onclick="cancelPhotoShare()">
+      取消拍照
+    </button>
+  `;
+
+  try{
+    cameraStream = await navigator.mediaDevices.getUserMedia({
+      video:{ facingMode:"environment", aspectRatio:0.75 },
+      audio:false
+    });
+    document.getElementById("cameraPreview").srcObject = cameraStream;
+  }catch(error){
+    stopCamera();
+    document.getElementById("mediaArea").innerHTML = `
+      <div class="photo-frame">
+        <div class="camera-placeholder">無法開啟相機。請確認已允許相機權限，並使用 HTTPS 或 localhost 開啟。</div>
+      </div>
+    `;
+  }
+}
+
+function capturePhoto(){
+  const video = document.getElementById("cameraPreview");
+
+  if(!video || video.videoWidth === 0 || video.videoHeight === 0){
+    alert("相機還在啟動中，請稍候再拍照。");
+    return;
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = 900;
+  canvas.height = 1200;
+  drawImageCover(canvas.getContext("2d"), video, 0, 0, canvas.width, canvas.height);
+  capturedPhotoDataUrl = canvas.toDataURL("image/jpeg", 0.92);
+  stopCamera();
+
+  document.getElementById("mediaArea").innerHTML = `
+    <div class="photo-frame">
+      <canvas class="photo-canvas" id="capturedPhoto" width="900" height="1200"></canvas>
+    </div>
+  `;
+
+  const photoCanvas = document.getElementById("capturedPhoto");
+  const photoContext = photoCanvas.getContext("2d");
+  const photo = new Image();
+  photo.onload = () => photoContext.drawImage(photo, 0, 0, photoCanvas.width, photoCanvas.height);
+  photo.src = capturedPhotoDataUrl;
+
+  document.getElementById("resultCard").classList.add("share-ready");
+  document.getElementById("actionArea").innerHTML = `
+    <button class="btn cocktail" onclick="shareResultImage()">
+      分享圖片
+    </button>
+
+    <button class="btn whisky" onclick="startPhotoShare()">
+      重新拍照
+    </button>
+  `;
+}
+
+function cancelPhotoShare(){
+  stopCamera();
+  capturedPhotoDataUrl = "";
+
+  if(currentDrink){
+    renderResult(currentDrink, currentCategory);
+  }
+}
+
+function stopCamera(){
+  if(cameraStream){
+    cameraStream.getTracks().forEach(track => track.stop());
+    cameraStream = null;
+  }
+}
+
+async function shareResultImage(){
+  if(!capturedPhotoDataUrl || !currentDrink){
+    alert("請先拍照再分享。");
+    return;
+  }
+
+  const canvas = await buildShareCanvas(currentDrink, capturedPhotoDataUrl);
+  const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
+
+  if(!blob){
+    alert("圖片產生失敗，請再試一次。");
+    return;
+  }
+
+  const file = new File([blob], "bar-oracle-share.png", { type:"image/png" });
+
+  if(navigator.canShare && navigator.canShare({ files:[file] }) && navigator.share){
+    try{
+      await navigator.share({
+        files:[file],
+        title:"Bar Oracle",
+        text:shareFooterText
+      });
+      return;
+    }catch(error){
+      if(error.name === "AbortError"){
+        return;
+      }
+    }
+  }
+
+  downloadBlob(blob, "bar-oracle-share.png");
+}
+
+function buildShareCanvas(drink, photoDataUrl){
+  return new Promise(resolve => {
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
+    const width = 1080;
+    const padding = 70;
+    const photoWidth = width - padding * 2;
+    const photoHeight = Math.round(photoWidth * 4 / 3);
+    const textMaxWidth = width - padding * 2;
+    const oracleText = drink.oracle || "今晚的答案，不一定在第一杯裡。";
+    const flavorText = `風味：${drink.flavor}`;
+    const oracleLines = wrapText(context, oracleText, textMaxWidth, "42px sans-serif");
+    const flavorLines = wrapText(context, flavorText, textMaxWidth, "36px sans-serif");
+    const height = padding + photoHeight + 85 + 58 + 48 + flavorLines.length * 48 + 48 + oracleLines.length * 58 + 95 + 60;
+
+    canvas.width = width;
+    canvas.height = height;
+
+    context.fillStyle = "#111";
+    context.fillRect(0, 0, width, height);
+    roundRect(context, 35, 35, width - 70, height - 70, 42, "#1c1c1c");
+
+    const photo = new Image();
+    photo.onload = () => {
+      const x = padding;
+      let y = padding;
+      context.save();
+      roundedClip(context, x, y, photoWidth, photoHeight, 34);
+      context.clip();
+      context.drawImage(photo, x, y, photoWidth, photoHeight);
+      context.restore();
+
+      y += photoHeight + 70;
+      context.textAlign = "center";
+      context.fillStyle = "#fff";
+      context.font = "bold 64px sans-serif";
+      context.fillText(drink.name, width / 2, y);
+
+      y += 70;
+      context.fillStyle = "#ddd";
+      context.font = "36px sans-serif";
+      context.fillText(`酒精濃度：${drink.abv}`, width / 2, y);
+
+      y += 58;
+      flavorLines.forEach(line => {
+        context.fillText(line, width / 2, y);
+        y += 48;
+      });
+
+      y += 20;
+      context.fillStyle = "#f5d27a";
+      context.font = "42px sans-serif";
+      oracleLines.forEach(line => {
+        context.fillText(line, width / 2, y);
+        y += 58;
+      });
+
+      y += 45;
+      context.strokeStyle = "rgba(255,255,255,0.18)";
+      context.beginPath();
+      context.moveTo(padding, y);
+      context.lineTo(width - padding, y);
+      context.stroke();
+
+      y += 55;
+      context.fillStyle = "#d4af37";
+      context.font = "34px sans-serif";
+      context.fillText(shareFooterText, width / 2, y);
+
+      resolve(canvas);
+    };
+    photo.src = photoDataUrl;
+  });
+}
+
+function drawImageCover(context, image, x, y, width, height){
+  const imageRatio = image.videoWidth / image.videoHeight || image.width / image.height;
+  const targetRatio = width / height;
+  let sourceWidth = image.videoWidth || image.width;
+  let sourceHeight = image.videoHeight || image.height;
+  let sourceX = 0;
+  let sourceY = 0;
+
+  if(imageRatio > targetRatio){
+    sourceWidth = sourceHeight * targetRatio;
+    sourceX = ((image.videoWidth || image.width) - sourceWidth) / 2;
+  }else{
+    sourceHeight = sourceWidth / targetRatio;
+    sourceY = ((image.videoHeight || image.height) - sourceHeight) / 2;
+  }
+
+  context.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, x, y, width, height);
+}
+
+function wrapText(context, text, maxWidth, font){
+  context.font = font;
+  const words = String(text).split("");
+  const lines = [];
+  let line = "";
+
+  words.forEach(char => {
+    const testLine = line + char;
+    if(context.measureText(testLine).width > maxWidth && line){
+      lines.push(line);
+      line = char;
+    }else{
+      line = testLine;
+    }
+  });
+
+  if(line){
+    lines.push(line);
+  }
+
+  return lines;
+}
+
+function roundRect(context, x, y, width, height, radius, color){
+  context.fillStyle = color;
+  roundedClip(context, x, y, width, height, radius);
+  context.fill();
+}
+
+function roundedClip(context, x, y, width, height, radius){
+  context.beginPath();
+  context.moveTo(x + radius, y);
+  context.lineTo(x + width - radius, y);
+  context.quadraticCurveTo(x + width, y, x + width, y + radius);
+  context.lineTo(x + width, y + height - radius);
+  context.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+  context.lineTo(x + radius, y + height);
+  context.quadraticCurveTo(x, y + height, x, y + height - radius);
+  context.lineTo(x, y + radius);
+  context.quadraticCurveTo(x, y, x + radius, y);
+  context.closePath();
+}
+
+function downloadBlob(blob, filename){
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 function showHome(){
+  stopCamera();
+  capturedPhotoDataUrl = "";
+  currentDrink = null;
+  currentCategory = "";
+
   document.getElementById("app").innerHTML = `
     <h1>🍸 不知道喝什麼？不如抽一杯？</h1>
 
